@@ -8,6 +8,12 @@ spring:
 cloudforge:
   scheduler:
     url: ${SCHEDULER_URL:http://localhost:8081}
+  worker:
+    id: ${WORKER_ID:worker-1}
+    cpu-capacity: ${WORKER_CPU_CAPACITY:4.0}
+    memory-capacity: ${WORKER_MEMORY_CAPACITY:8192}
+    heartbeat:
+      fixed-delay-ms: ${WORKER_HEARTBEAT_INTERVAL_MS:5000}
 
 management:
   endpoints:

@@ -18,6 +18,7 @@ public class LeastLoadedSchedulingStrategy implements SchedulingStrategy {
     @Override
     public Optional<WorkerEntity> selectWorker(JobEntity job, List<WorkerEntity> eligibleWorkers) {
         return eligibleWorkers.stream()
-                .max(Comparator.comparingDouble(WorkerEntity::getCpuAvailable));
+                .filter(w -> w.getCpuAvailable() >= job.getCpuRequirement())
+                .min(Comparator.comparingDouble(WorkerEntity::getCpuAvailable));
     }
 }
