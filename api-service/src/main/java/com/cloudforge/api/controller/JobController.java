@@ -1,5 +1,6 @@
 package com.cloudforge.api.controller;
 
+import com.cloudforge.api.dto.JobCompletionRequest;
 import com.cloudforge.api.dto.JobResponse;
 import com.cloudforge.api.dto.JobSubmissionRequest;
 import com.cloudforge.api.service.JobService;
@@ -39,5 +40,16 @@ public class JobController {
     @PostMapping("/{id}/cancel")
     public ResponseEntity<JobResponse> cancelJob(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(jobService.cancelJob(id));
+    }
+
+    @PostMapping("/{id}/start")
+    public ResponseEntity<JobResponse> startJob(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(jobService.startJob(id));
+    }
+
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<JobResponse> completeJob(@PathVariable("id") UUID id,
+            @Valid @RequestBody JobCompletionRequest request) {
+        return ResponseEntity.ok(jobService.completeJob(id, request.getExitCode()));
     }
 }

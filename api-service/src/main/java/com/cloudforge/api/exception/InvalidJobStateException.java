@@ -7,6 +7,10 @@ import java.util.UUID;
 public class InvalidJobStateException extends RuntimeException {
 
     public InvalidJobStateException(UUID id, JobStatus currentStatus) {
-        super("Job " + id + " cannot be cancelled from status " + currentStatus);
+        this(id, currentStatus, "cancelled");
+    }
+
+    public InvalidJobStateException(UUID id, JobStatus currentStatus, String action) {
+        super("Job " + id + " cannot be " + action + " from status " + currentStatus);
     }
 }

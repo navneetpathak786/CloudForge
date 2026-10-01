@@ -80,6 +80,43 @@ public class JobService {
     }
 
     /**
+     * Worker's acknowledgment of a SCHEDULED job assignment writes RUNNING, per
+     * docs/architecture.md step 3 - the Scheduler does not assume this optimistically.
+     */
+    @Transactional
+    public JobResponse startJob(UUID id) {
+        JobEntity entity = jobRepository.findById(id)
+                .orElseThrow(() -> new JobNotFoundException(id));
+
+        if (entity.getStatus() != JobStatus.SCHEDULED) {
+            throw new InvalidJobStateException(id, entity.getStatus(), "started");
+        }
+
+        entity.setStatus(JobStatus.RUNNING);
+        JobEntity saved = jobRepository.save(entity);
+        return toResponse(saved);
+    }
+
+    /**
+     * Worker reports the process exit code once the job finishes, per
+     * docs/architecture.md step 4 - COMPLETED on exit code 0, FAILED otherwise.
+     * Attempt records and retries are not implemented yet.
+     */
+    @Transactional
+    public JobResponse completeJob(UUID id, int exitCode) {
+        JobEntity entity = jobRepository.findById(id)
+                .orElseThrow(() -> new JobNotFoundException(id));
+
+        if (entity.getStatus() != JobStatus.RUNNING) {
+            throw new InvalidJobStateException(id, entity.getStatus(), "completed");
+        }
+
+        entity.setStatus(exitCode == 0 ? JobStatus.COMPLETED : JobStatus.FAILED);
+        JobEntity saved = jobRepository.save(entity);
+        return toResponse(saved);
+    }
+
+    /**
      * Marks a QUEUED/RUNNING (or still-SUBMITTED) job CANCELLED. For a RUNNING job the
      * architecture calls for a graceful stop signal to the worker first; that requires
      * scheduler/worker-agent coordination that doesn't exist yet, so this only updates

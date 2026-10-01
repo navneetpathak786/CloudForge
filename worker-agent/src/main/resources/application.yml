@@ -4,16 +4,24 @@ server:
 spring:
   application:
     name: worker-agent
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 cloudforge:
   scheduler:
     url: ${SCHEDULER_URL:http://localhost:8081}
+  api:
+    url: ${API_URL:http://localhost:8080}
   worker:
     id: ${WORKER_ID:worker-1}
     cpu-capacity: ${WORKER_CPU_CAPACITY:4.0}
     memory-capacity: ${WORKER_MEMORY_CAPACITY:8192}
     heartbeat:
       fixed-delay-ms: ${WORKER_HEARTBEAT_INTERVAL_MS:5000}
+    job-poll:
+      fixed-delay-ms: ${WORKER_JOB_POLL_INTERVAL_MS:2000}
 
 management:
   endpoints:

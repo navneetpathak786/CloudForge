@@ -27,18 +27,18 @@ class LeastLoadedSchedulingStrategyTest {
     }
 
     @Test
-    void selectWorker_withMultipleEligibleWorkers_picksTheOneWithMostAvailableCpu() {
+    void selectWorker_withMultipleEligibleWorkers_picksTheBestFit() {
         JobEntity job = new JobEntity();
         job.setId(UUID.randomUUID());
         job.setCpuRequirement(1.0);
         job.setMemoryRequirement(512L);
 
-        WorkerEntity leastLoaded = worker("worker-2", 6.0);
-        List<WorkerEntity> eligible = List.of(worker("worker-1", 2.0), leastLoaded, worker("worker-3", 4.0));
+        WorkerEntity bestFit = worker("worker-1", 2.0);
+        List<WorkerEntity> eligible = List.of(bestFit, worker("worker-2", 6.0), worker("worker-3", 4.0));
 
         Optional<WorkerEntity> chosen = strategy.selectWorker(job, eligible);
 
-        assertThat(chosen).contains(leastLoaded);
+        assertThat(chosen).contains(bestFit);
     }
 
     @Test

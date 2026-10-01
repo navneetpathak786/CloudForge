@@ -185,4 +185,85 @@ class JobServiceTest {
         assertThatThrownBy(() -> jobService.cancelJob(id))
                 .isInstanceOf(JobNotFoundException.class);
     }
+
+    @Test
+    void startJob_withScheduledJob_marksJobRunning() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.SCHEDULED);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JobResponse response = jobService.startJob(id);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.RUNNING);
+    }
+
+    @Test
+    void startJob_withNonScheduledJob_throwsInvalidJobStateException() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.QUEUED);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> jobService.startJob(id))
+                .isInstanceOf(InvalidJobStateException.class);
+    }
+
+    @Test
+    void completeJob_withZeroExitCode_marksJobCompleted() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.RUNNING);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JobResponse response = jobService.completeJob(id, 0);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
+    void completeJob_withNonZeroExitCode_marksJobFailed() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.RUNNING);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JobResponse response = jobService.completeJob(id, 1);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.FAILED);
+    }
+
+    @Test
+    void completeJob_withNonRunningJob_throwsInvalidJobStateException() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.SCHEDULED);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> jobService.completeJob(id, 0))
+                .isInstanceOf(InvalidJobStateException.class);
+    }
 }
