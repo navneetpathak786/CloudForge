@@ -86,6 +86,7 @@ public class SchedulingService {
         job.setStatus(JobStatus.SCHEDULED);
         job.setAssignedWorkerId(chosen.get().getId());
         jobRepository.save(job);
+        jobQueue.enqueueForWorker(chosen.get().getId(), jobIdRaw);
         return true;
     }
 }

@@ -101,6 +101,9 @@ class SchedulingIntegrationTest {
         WorkerEntity updatedWorker = workerRepository.findById("int-worker-1").orElseThrow();
         assertThat(updatedWorker.getCpuAvailable()).isEqualTo(999_999.0);
         assertThat(updatedWorker.getMemoryAvailable()).isEqualTo(999_999_488L);
+
+        assertThat(redisTemplate.opsForList().range(JobQueueKeys.workerJobsKey("int-worker-1"), 0, -1))
+                .contains(job.getId().toString());
     }
 
     @Test

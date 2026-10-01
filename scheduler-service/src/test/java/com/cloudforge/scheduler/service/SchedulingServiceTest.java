@@ -94,6 +94,7 @@ class SchedulingServiceTest {
         assertThat(job.getStatus()).isEqualTo(JobStatus.SCHEDULED);
         assertThat(job.getAssignedWorkerId()).isEqualTo("worker-1");
         verify(jobQueue, never()).requeue(any());
+        verify(jobQueue).enqueueForWorker("worker-1", jobId.toString());
     }
 
     @Test
@@ -112,6 +113,7 @@ class SchedulingServiceTest {
         assertThat(job.getStatus()).isEqualTo(JobStatus.QUEUED);
         verify(jobQueue).requeue(jobId.toString());
         verify(jobRepository, never()).save(any());
+        verify(jobQueue, never()).enqueueForWorker(any(), any());
     }
 
     @Test
@@ -132,6 +134,7 @@ class SchedulingServiceTest {
         assertThat(job.getStatus()).isEqualTo(JobStatus.QUEUED);
         verify(jobQueue).requeue(jobId.toString());
         verify(jobRepository, never()).save(any());
+        verify(jobQueue, never()).enqueueForWorker(any(), any());
     }
 
     @Test
@@ -147,5 +150,6 @@ class SchedulingServiceTest {
         assertThat(result).isTrue();
         verify(jobQueue, never()).requeue(any());
         verify(jobRepository, never()).save(any());
+        verify(jobQueue, never()).enqueueForWorker(any(), any());
     }
 }

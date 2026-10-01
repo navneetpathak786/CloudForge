@@ -34,4 +34,12 @@ public class JobQueue {
         Long size = redisTemplate.opsForList().size(JobQueueKeys.QUEUED_JOBS_KEY);
         return size == null ? 0L : size;
     }
+
+    /**
+     * Delivers a scheduled job id onto the Redis queue dedicated to the
+     * worker it was assigned to.
+     */
+    public void enqueueForWorker(String workerId, String jobId) {
+        redisTemplate.opsForList().rightPush(JobQueueKeys.workerJobsKey(workerId), jobId);
+    }
 }
