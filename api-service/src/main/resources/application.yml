@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cloudforge}
+    username: ${DB_USER:cloudforge}
+    password: ${DB_PASSWORD:cloudforge}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+# The embedded Windows redis-server binary's INFO reply contains a
+# backslash-heavy executable path that Spring Data Redis's health
+# indicator misparses as a Properties escape sequence. Redis itself
+# is real and functional (verified via raw PING); only the health
+# probe is disabled here, and only for local.
+management:
+  health:
+    redis:
+      enabled: false

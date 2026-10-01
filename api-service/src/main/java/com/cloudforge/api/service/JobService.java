@@ -1,0 +1,114 @@
+package com.cloudforge.api.service;
+
+import com.cloudforge.api.dto.JobResponse;
+import com.cloudforge.api.dto.JobSubmissionRequest;
+import com.cloudforge.api.entity.JobEntity;
+import com.cloudforge.api.exception.InvalidJobStateException;
+import com.cloudforge.api.exception.JobNotFoundException;
+import com.cloudforge.api.queue.JobQueue;
+import com.cloudforge.api.repository.JobRepository;
+import com.cloudforge.common.model.JobStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * Handles job submission: validation is enforced on JobSubmissionRequest via
+ * Bean Validation before this is reached. A validated job is written to the
+ * Job Store and enqueued in the same step (SUBMITTED has no separate durable
+ * state in V1 - nothing yet reviews a job between validation and queueing).
+ */
+@Service
+public class JobService {
+
+    private static final Logger log = LoggerFactory.getLogger(JobService.class);
+
+    /**
+     * SUBMITTED is kept in this set defensively even though no job is currently
+     * observed in that state (see submitJob) - it remains a valid lifecycle state
+     * per docs/requirements.md and should stay cancellable if that ever changes.
+     */
+    private static final Set<JobStatus> CANCELLABLE_STATUSES =
+            EnumSet.of(JobStatus.SUBMITTED, JobStatus.QUEUED, JobStatus.RUNNING);
+
+    private final JobRepository jobRepository;
+    private final JobQueue jobQueue;
+
+    public JobService(JobRepository jobRepository, JobQueue jobQueue) {
+        this.jobRepository = jobRepository;
+        this.jobQueue = jobQueue;
+    }
+
+    @Transactional
+    public JobResponse submitJob(JobSubmissionRequest request) {
+        JobEntity entity = new JobEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setName(request.getName());
+        entity.setCommand(request.getCommand());
+        entity.setCpuRequirement(request.getCpuRequirement());
+        entity.setMemoryRequirement(request.getMemoryRequirement());
+        entity.setMaxRetries(request.getMaxRetries());
+        entity.setPriority(request.getPriority());
+        entity.setStatus(JobStatus.QUEUED);
+        entity.setCreatedAt(Instant.now());
+
+        JobEntity saved = jobRepository.save(entity);
+
+        try {
+            jobQueue.enqueue(saved.getId().toString());
+        } catch (Exception e) {
+            // The job is already durably QUEUED in the Job Store, so it is not lost -
+            // it just won't be picked up until a reconciliation pass (not yet implemented)
+            // notices it's QUEUED but missing from the Redis queue.
+            log.warn("Failed to enqueue job {} onto the Redis queue", saved.getId(), e);
+        }
+
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public JobResponse getJob(UUID id) {
+        return jobRepository.findById(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new JobNotFoundException(id));
+    }
+
+    /**
+     * Marks a QUEUED/RUNNING (or still-SUBMITTED) job CANCELLED. For a RUNNING job the
+     * architecture calls for a graceful stop signal to the worker first; that requires
+     * scheduler/worker-agent coordination that doesn't exist yet, so this only updates
+     * the store for now - worker-side stop signaling is deferred with that work.
+     */
+    @Transactional
+    public JobResponse cancelJob(UUID id) {
+        JobEntity entity = jobRepository.findById(id)
+                .orElseThrow(() -> new JobNotFoundException(id));
+
+        if (!CANCELLABLE_STATUSES.contains(entity.getStatus())) {
+            throw new InvalidJobStateException(id, entity.getStatus());
+        }
+
+        entity.setStatus(JobStatus.CANCELLED);
+        JobEntity saved = jobRepository.save(entity);
+        return toResponse(saved);
+    }
+
+    private JobResponse toResponse(JobEntity entity) {
+        return new JobResponse(
+                entity.getId().toString(),
+                entity.getName(),
+                entity.getCommand(),
+                entity.getCpuRequirement(),
+                entity.getMemoryRequirement(),
+                entity.getMaxRetries(),
+                entity.getPriority(),
+                entity.getStatus(),
+                entity.getCreatedAt());
+    }
+}

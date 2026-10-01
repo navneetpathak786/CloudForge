@@ -1,0 +1,3 @@
+scheduler:
+  loop:
+    enabled: false

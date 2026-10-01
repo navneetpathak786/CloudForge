@@ -1,0 +1,11 @@
+target/
+*.class
+*.log
+
+.env
+.env.*
+
+.idea/
+*.iml
+
+.claude/
