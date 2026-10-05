@@ -86,15 +86,37 @@ class SchedulingServiceTest {
         when(workerRepository.findByStatus(WorkerStatus.HEALTHY)).thenReturn(List.of(chosenWorker));
         when(schedulingStrategy.selectWorker(eq(job), any())).thenReturn(Optional.of(chosenWorker));
         when(workerRepository.reserveResources(eq("worker-1"), anyDouble(), anyLong())).thenReturn(1);
-        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jobRepository.markScheduled(jobId, "worker-1")).thenReturn(1);
 
         boolean result = schedulingService().scheduleNext();
 
         assertThat(result).isTrue();
-        assertThat(job.getStatus()).isEqualTo(JobStatus.SCHEDULED);
-        assertThat(job.getAssignedWorkerId()).isEqualTo("worker-1");
+        verify(jobRepository).markScheduled(jobId, "worker-1");
+        verify(workerRepository, never()).releaseResources(any(), anyDouble(), anyLong());
         verify(jobQueue, never()).requeue(any());
         verify(jobQueue).enqueueForWorker("worker-1", jobId.toString());
+    }
+
+    @Test
+    void scheduleNext_whenJobChangedStateBeforeCommit_releasesReservationAndDropsJobWithoutOverwritingIt() {
+        UUID jobId = UUID.randomUUID();
+        JobEntity job = job(jobId, JobStatus.QUEUED);
+        WorkerEntity chosenWorker = worker("worker-1");
+
+        when(jobQueue.dequeue()).thenReturn(Optional.of(jobId.toString()));
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(workerRepository.findByStatus(WorkerStatus.HEALTHY)).thenReturn(List.of(chosenWorker));
+        when(schedulingStrategy.selectWorker(eq(job), any())).thenReturn(Optional.of(chosenWorker));
+        when(workerRepository.reserveResources(eq("worker-1"), anyDouble(), anyLong())).thenReturn(1);
+        when(jobRepository.markScheduled(jobId, "worker-1")).thenReturn(0);
+
+        boolean result = schedulingService().scheduleNext();
+
+        assertThat(result).isTrue();
+        verify(workerRepository).releaseResources("worker-1", job.getCpuRequirement(), job.getMemoryRequirement());
+        verify(jobRepository, never()).save(any());
+        verify(jobQueue, never()).requeue(any());
+        verify(jobQueue, never()).enqueueForWorker(any(), any());
     }
 
     @Test

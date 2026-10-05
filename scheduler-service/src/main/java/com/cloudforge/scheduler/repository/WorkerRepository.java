@@ -23,4 +23,14 @@ public interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
             + "w.memoryAvailable = w.memoryAvailable - :memory "
             + "WHERE w.id = :id AND w.cpuAvailable >= :cpu AND w.memoryAvailable >= :memory")
     int reserveResources(@Param("id") String id, @Param("cpu") double cpu, @Param("memory") long memory);
+
+    /**
+     * Releases a reservation previously made by reserveResources - used when the
+     * job it was reserved for turned out to have changed state before scheduling
+     * could be committed, so the capacity isn't lost.
+     */
+    @Modifying
+    @Query("UPDATE WorkerEntity w SET w.cpuAvailable = w.cpuAvailable + :cpu, "
+            + "w.memoryAvailable = w.memoryAvailable + :memory WHERE w.id = :id")
+    int releaseResources(@Param("id") String id, @Param("cpu") double cpu, @Param("memory") long memory);
 }

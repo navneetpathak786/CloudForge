@@ -75,18 +75,24 @@ public class SchedulingService {
             return true;
         }
 
-        int updated = workerRepository.reserveResources(
-                chosen.get().getId(), job.getCpuRequirement(), job.getMemoryRequirement());
-        if (updated == 0) {
+        String workerId = chosen.get().getId();
+        int reserved = workerRepository.reserveResources(workerId, job.getCpuRequirement(), job.getMemoryRequirement());
+        if (reserved == 0) {
             // Lost the race to another reservation against the same worker; retry next pass.
             jobQueue.requeue(jobIdRaw);
             return true;
         }
 
-        job.setStatus(JobStatus.SCHEDULED);
-        job.setAssignedWorkerId(chosen.get().getId());
-        jobRepository.save(job);
-        jobQueue.enqueueForWorker(chosen.get().getId(), jobIdRaw);
+        int scheduled = jobRepository.markScheduled(jobId, workerId);
+        if (scheduled == 0) {
+            // Job changed state (e.g. cancelled) after our initial read; release the
+            // reservation we just made and drop it from this pass without overwriting it.
+            workerRepository.releaseResources(workerId, job.getCpuRequirement(), job.getMemoryRequirement());
+            log.warn("Job {} changed state after being read as QUEUED; releasing reservation and dropping from this pass", jobIdRaw);
+            return true;
+        }
+
+        jobQueue.enqueueForWorker(workerId, jobIdRaw);
         return true;
     }
 }
