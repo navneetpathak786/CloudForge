@@ -50,6 +50,9 @@ public class JobEntity {
     @Column(name = "assigned_worker_id")
     private String assignedWorkerId;
 
+    @Column(name = "resources_released_at")
+    private Instant resourcesReleasedAt;
+
     public UUID getId() {
         return id;
     }
@@ -128,5 +131,13 @@ public class JobEntity {
 
     public void setAssignedWorkerId(String assignedWorkerId) {
         this.assignedWorkerId = assignedWorkerId;
+    }
+
+    public Instant getResourcesReleasedAt() {
+        return resourcesReleasedAt;
+    }
+
+    public void setResourcesReleasedAt(Instant resourcesReleasedAt) {
+        this.resourcesReleasedAt = resourcesReleasedAt;
     }
 }

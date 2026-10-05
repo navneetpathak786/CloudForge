@@ -8,5 +8,6 @@ CREATE TABLE jobs (
     priority INT,
     status VARCHAR(32) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    assigned_worker_id VARCHAR(255)
+    assigned_worker_id VARCHAR(255),
+    resources_released_at TIMESTAMPTZ
 );
