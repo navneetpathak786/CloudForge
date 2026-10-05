@@ -30,6 +30,14 @@ public class JobQueue {
         redisTemplate.opsForList().rightPush(JobQueueKeys.QUEUED_JOBS_KEY, jobId);
     }
 
+    /**
+     * Whether a job id is currently present on the queue - used by reconciliation to
+     * avoid pushing a duplicate entry for a job that's already there.
+     */
+    public boolean isQueued(String jobId) {
+        return redisTemplate.opsForList().indexOf(JobQueueKeys.QUEUED_JOBS_KEY, jobId) != null;
+    }
+
     public long size() {
         Long size = redisTemplate.opsForList().size(JobQueueKeys.QUEUED_JOBS_KEY);
         return size == null ? 0L : size;

@@ -2,6 +2,7 @@ package com.cloudforge.scheduler.repository;
 
 import com.cloudforge.common.model.JobStatus;
 import com.cloudforge.scheduler.entity.JobEntity;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,6 +12,13 @@ import java.util.List;
 import java.util.UUID;
 
 public interface JobRepository extends JpaRepository<JobEntity, UUID> {
+
+    /**
+     * QUEUED jobs, bounded - the candidate set for Postgres-to-Redis queue
+     * reconciliation (Postgres is the source of truth; Redis is a disposable
+     * work queue that can lose entries without the job's QUEUED status being lost).
+     */
+    List<JobEntity> findByStatus(JobStatus status, Limit limit);
 
     /**
      * Marks a job SCHEDULED atomically: the WHERE clause re-checks that the job is
