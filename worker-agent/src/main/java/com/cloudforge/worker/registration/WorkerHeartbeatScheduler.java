@@ -13,16 +13,23 @@ public class WorkerHeartbeatScheduler {
     private static final Logger log = LoggerFactory.getLogger(WorkerHeartbeatScheduler.class);
 
     private final SchedulerClient schedulerClient;
+    private final WorkerRegistrationState registrationState;
     private final String workerId;
 
     public WorkerHeartbeatScheduler(SchedulerClient schedulerClient,
+            WorkerRegistrationState registrationState,
             @Value("${cloudforge.worker.id}") String workerId) {
         this.schedulerClient = schedulerClient;
+        this.registrationState = registrationState;
         this.workerId = workerId;
     }
 
     @Scheduled(fixedDelayString = "${cloudforge.worker.heartbeat.fixed-delay-ms:5000}")
     public void sendHeartbeat() {
+        if (!registrationState.isRegistered()) {
+            return;
+        }
+
         try {
             schedulerClient.sendHeartbeat(workerId);
         } catch (Exception e) {

@@ -1,0 +1,7 @@
+{
+  "name": "slow-test",
+  "command": "ping -n 4 127.0.0.1 >nul",
+  "cpuRequirement": 1.0,
+  "memoryRequirement": 256,
+  "maxRetries": 0
+}

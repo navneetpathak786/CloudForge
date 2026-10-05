@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -15,9 +16,13 @@ class WorkerHeartbeatSchedulerTest {
     @Mock
     private SchedulerClient schedulerClient;
 
+    private final WorkerRegistrationState registrationState = new WorkerRegistrationState();
+
     @Test
-    void sendHeartbeat_sendsHeartbeatForConfiguredWorker() {
-        WorkerHeartbeatScheduler scheduler = new WorkerHeartbeatScheduler(schedulerClient, "worker-1");
+    void sendHeartbeat_whenRegistered_sendsHeartbeatForConfiguredWorker() {
+        registrationState.markRegistered();
+        WorkerHeartbeatScheduler scheduler =
+                new WorkerHeartbeatScheduler(schedulerClient, registrationState, "worker-1");
 
         scheduler.sendHeartbeat();
 
@@ -25,8 +30,20 @@ class WorkerHeartbeatSchedulerTest {
     }
 
     @Test
+    void sendHeartbeat_whenNotYetRegistered_doesNotCallScheduler() {
+        WorkerHeartbeatScheduler scheduler =
+                new WorkerHeartbeatScheduler(schedulerClient, registrationState, "worker-1");
+
+        scheduler.sendHeartbeat();
+
+        verify(schedulerClient, never()).sendHeartbeat("worker-1");
+    }
+
+    @Test
     void sendHeartbeat_whenSchedulerCallFails_doesNotPropagateException() {
-        WorkerHeartbeatScheduler scheduler = new WorkerHeartbeatScheduler(schedulerClient, "worker-1");
+        registrationState.markRegistered();
+        WorkerHeartbeatScheduler scheduler =
+                new WorkerHeartbeatScheduler(schedulerClient, registrationState, "worker-1");
         doThrow(new RuntimeException("scheduler unavailable"))
                 .when(schedulerClient).sendHeartbeat("worker-1");
 

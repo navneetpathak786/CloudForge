@@ -12,6 +12,14 @@ spring:
     hibernate:
       ddl-auto: none
     open-in-view: false
+  flyway:
+    # scheduler-service shares its Postgres database with api-service, each owning
+    # a different table (workers vs jobs) but both numbering migrations from V1.
+    # A separate history table keeps the two services' migrations from colliding
+    # in Flyway's checksum validation.
+    table: flyway_schema_history_scheduler
+    baseline-on-migrate: true
+    baseline-version: "0"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
