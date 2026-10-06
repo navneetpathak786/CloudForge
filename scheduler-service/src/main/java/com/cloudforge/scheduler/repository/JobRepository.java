@@ -39,6 +39,27 @@ public interface JobRepository extends JpaRepository<JobEntity, UUID> {
     List<JobEntity> findByStatusInAndAssignedWorkerIdIsNotNullAndResourcesReleasedAtIsNull(List<JobStatus> statuses);
 
     /**
+     * Jobs in the given status currently assigned to the given worker - used to
+     * find jobs stuck RUNNING on a worker that's gone DOWN.
+     */
+    List<JobEntity> findByStatusAndAssignedWorkerId(JobStatus status, String assignedWorkerId);
+
+    /**
+     * Recovers a stuck job atomically: the WHERE clause re-checks it's still
+     * RUNNING at write time, so a job that already finished (or was already
+     * recovered by an earlier pass) can't be overwritten. Clearing
+     * assignedWorkerId lets the job be rescheduled fresh, and leaves
+     * resourcesReleasedAt alone so the resource-release loop still fires exactly
+     * once against whichever worker the job is next assigned to. Returns the
+     * number of rows updated (0 if it was no longer RUNNING).
+     */
+    @Modifying
+    @Query("UPDATE JobEntity j SET j.status = com.cloudforge.common.model.JobStatus.QUEUED, "
+            + "j.assignedWorkerId = NULL "
+            + "WHERE j.id = :id AND j.status = com.cloudforge.common.model.JobStatus.RUNNING")
+    int recoverStuckJob(@Param("id") UUID id);
+
+    /**
      * Marks a job's resources released atomically: the WHERE clause re-checks that
      * they haven't already been released, so a job can never have its worker
      * capacity released twice. Returns the number of rows updated (0 if already released).

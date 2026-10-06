@@ -1,3 +1,7 @@
 scheduler:
   loop:
     enabled: false
+  worker-health:
+    enabled: false
+  stuck-job-recovery:
+    enabled: false

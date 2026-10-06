@@ -7,11 +7,32 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
 
     List<WorkerEntity> findByStatus(WorkerStatus status);
+
+    /**
+     * HEALTHY workers whose last heartbeat is older than the given threshold -
+     * the candidate set for the worker-health sweep. A null lastHeartbeat (never
+     * heartbeated yet, still REGISTERING) never matches "<", so a freshly
+     * registered worker isn't mistaken for a stale one.
+     */
+    List<WorkerEntity> findByStatusAndLastHeartbeatBefore(WorkerStatus status, Instant threshold);
+
+    /**
+     * Marks a worker DOWN atomically: the WHERE clause re-checks it's still
+     * HEALTHY and still stale as of the same threshold at write time, so a
+     * heartbeat that arrives concurrently with the sweep can't be clobbered.
+     * Returns the number of rows updated (0 if it was no longer stale/HEALTHY).
+     */
+    @Modifying
+    @Query("UPDATE WorkerEntity w SET w.status = com.cloudforge.common.model.WorkerStatus.DOWN "
+            + "WHERE w.id = :id AND w.status = com.cloudforge.common.model.WorkerStatus.HEALTHY "
+            + "AND w.lastHeartbeat < :threshold")
+    int markDown(@Param("id") String id, @Param("threshold") Instant threshold);
 
     /**
      * Reserves capacity atomically: the WHERE clause re-checks availability at write
