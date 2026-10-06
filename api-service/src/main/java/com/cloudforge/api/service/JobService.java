@@ -54,6 +54,7 @@ public class JobService {
         entity.setCpuRequirement(request.getCpuRequirement());
         entity.setMemoryRequirement(request.getMemoryRequirement());
         entity.setMaxRetries(request.getMaxRetries());
+        entity.setAttemptCount(0);
         entity.setPriority(request.getPriority());
         entity.setStatus(JobStatus.QUEUED);
         entity.setCreatedAt(Instant.now());
@@ -99,8 +100,13 @@ public class JobService {
 
     /**
      * Worker reports the process exit code once the job finishes, per
-     * docs/architecture.md step 4 - COMPLETED on exit code 0, FAILED otherwise.
-     * Attempt records and retries are not implemented yet.
+     * docs/architecture.md step 4 - COMPLETED on exit code 0. On failure, this
+     * also decides retry eligibility (step 5): if attemptCount is still within
+     * maxRetries after incrementing, the job goes back to QUEUED and is
+     * re-enqueued the same best-effort way submitJob does - a failed enqueue
+     * leaves it durably QUEUED for the reconciliation sweep to pick up.
+     * Requiring the job to still be RUNNING also guards against a duplicate/late
+     * completion report re-triggering a retry once this has already run once.
      */
     @Transactional
     public JobResponse completeJob(UUID id, int exitCode) {
@@ -111,7 +117,27 @@ public class JobService {
             throw new InvalidJobStateException(id, entity.getStatus(), "completed");
         }
 
-        entity.setStatus(exitCode == 0 ? JobStatus.COMPLETED : JobStatus.FAILED);
+        if (exitCode == 0) {
+            entity.setStatus(JobStatus.COMPLETED);
+            JobEntity saved = jobRepository.save(entity);
+            return toResponse(saved);
+        }
+
+        entity.setAttemptCount(entity.getAttemptCount() + 1);
+        if (entity.getAttemptCount() <= entity.getMaxRetries()) {
+            entity.setStatus(JobStatus.QUEUED);
+            JobEntity saved = jobRepository.save(entity);
+
+            try {
+                jobQueue.enqueue(saved.getId().toString());
+            } catch (Exception e) {
+                log.warn("Failed to re-enqueue job {} onto the Redis queue for retry", saved.getId(), e);
+            }
+
+            return toResponse(saved);
+        }
+
+        entity.setStatus(JobStatus.FAILED);
         JobEntity saved = jobRepository.save(entity);
         return toResponse(saved);
     }
@@ -144,6 +170,7 @@ public class JobService {
                 entity.getCpuRequirement(),
                 entity.getMemoryRequirement(),
                 entity.getMaxRetries(),
+                entity.getAttemptCount(),
                 entity.getPriority(),
                 entity.getStatus(),
                 entity.getCreatedAt());

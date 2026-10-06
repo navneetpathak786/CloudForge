@@ -33,6 +33,9 @@ public class JobEntity {
     @Column(name = "max_retries", nullable = false)
     private int maxRetries;
 
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
     @Column
     private Integer priority;
 
@@ -89,6 +92,14 @@ public class JobEntity {
 
     public void setMaxRetries(int maxRetries) {
         this.maxRetries = maxRetries;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public void setAttemptCount(int attemptCount) {
+        this.attemptCount = attemptCount;
     }
 
     public Integer getPriority() {

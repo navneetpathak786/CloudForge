@@ -22,7 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,6 +64,7 @@ class JobServiceTest {
         assertThat(saved.getCpuRequirement()).isEqualTo(1.5);
         assertThat(saved.getMemoryRequirement()).isEqualTo(512L);
         assertThat(saved.getMaxRetries()).isEqualTo(3);
+        assertThat(saved.getAttemptCount()).isEqualTo(0);
         assertThat(saved.getPriority()).isEqualTo(5);
 
         assertThat(response.getId()).isEqualTo(saved.getId().toString());
@@ -226,6 +229,8 @@ class JobServiceTest {
         JobEntity entity = new JobEntity();
         entity.setId(id);
         entity.setStatus(JobStatus.RUNNING);
+        entity.setMaxRetries(3);
+        entity.setAttemptCount(1);
 
         when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
         when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -233,16 +238,68 @@ class JobServiceTest {
         JobResponse response = jobService.completeJob(id, 0);
 
         assertThat(response.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(response.getAttemptCount()).isEqualTo(1);
+        verifyNoInteractions(jobQueue);
     }
 
     @Test
-    void completeJob_withNonZeroExitCode_marksJobFailed() {
+    void completeJob_withNonZeroExitCode_andRetriesRemaining_marksJobQueuedIncrementsAttemptCountAndReenqueues() {
         JobService jobService = new JobService(jobRepository, jobQueue);
 
         UUID id = UUID.randomUUID();
         JobEntity entity = new JobEntity();
         entity.setId(id);
         entity.setStatus(JobStatus.RUNNING);
+        entity.setMaxRetries(3);
+        entity.setAttemptCount(0);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JobResponse response = jobService.completeJob(id, 1);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.QUEUED);
+        assertThat(response.getAttemptCount()).isEqualTo(1);
+
+        ArgumentCaptor<JobEntity> captor = ArgumentCaptor.forClass(JobEntity.class);
+        verify(jobRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(1);
+        assertThat(captor.getValue().getStatus()).isEqualTo(JobStatus.QUEUED);
+
+        verify(jobQueue).enqueue(id.toString());
+    }
+
+    @Test
+    void completeJob_withNonZeroExitCode_whenEnqueueFails_stillMarksJobQueuedForRetry() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.RUNNING);
+        entity.setMaxRetries(3);
+        entity.setAttemptCount(0);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new RuntimeException("redis unavailable")).when(jobQueue).enqueue(any());
+
+        JobResponse response = jobService.completeJob(id, 1);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.QUEUED);
+        assertThat(response.getAttemptCount()).isEqualTo(1);
+    }
+
+    @Test
+    void completeJob_withNonZeroExitCode_andRetriesExhausted_marksJobFailedAndDoesNotEnqueue() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.RUNNING);
+        entity.setMaxRetries(3);
+        entity.setAttemptCount(3);
 
         when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
         when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -250,6 +307,34 @@ class JobServiceTest {
         JobResponse response = jobService.completeJob(id, 1);
 
         assertThat(response.getStatus()).isEqualTo(JobStatus.FAILED);
+        assertThat(response.getAttemptCount()).isEqualTo(4);
+
+        ArgumentCaptor<JobEntity> captor = ArgumentCaptor.forClass(JobEntity.class);
+        verify(jobRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttemptCount()).isEqualTo(4);
+        assertThat(captor.getValue().getStatus()).isEqualTo(JobStatus.FAILED);
+
+        verifyNoInteractions(jobQueue);
+    }
+
+    @Test
+    void completeJob_withNonZeroExitCode_andNoRetriesConfigured_marksJobFailed() {
+        JobService jobService = new JobService(jobRepository, jobQueue);
+
+        UUID id = UUID.randomUUID();
+        JobEntity entity = new JobEntity();
+        entity.setId(id);
+        entity.setStatus(JobStatus.RUNNING);
+        entity.setMaxRetries(0);
+        entity.setAttemptCount(0);
+
+        when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JobResponse response = jobService.completeJob(id, 1);
+
+        assertThat(response.getStatus()).isEqualTo(JobStatus.FAILED);
+        assertThat(response.getAttemptCount()).isEqualTo(1);
     }
 
     @Test
@@ -260,10 +345,16 @@ class JobServiceTest {
         JobEntity entity = new JobEntity();
         entity.setId(id);
         entity.setStatus(JobStatus.SCHEDULED);
+        entity.setMaxRetries(3);
+        entity.setAttemptCount(1);
 
         when(jobRepository.findById(id)).thenReturn(Optional.of(entity));
 
         assertThatThrownBy(() -> jobService.completeJob(id, 0))
                 .isInstanceOf(InvalidJobStateException.class);
+
+        assertThat(entity.getAttemptCount()).isEqualTo(1);
+        verify(jobRepository, never()).save(any());
+        verifyNoInteractions(jobQueue);
     }
 }

@@ -12,12 +12,13 @@ public class JobResponse {
     private final double cpuRequirement;
     private final long memoryRequirement;
     private final int maxRetries;
+    private final int attemptCount;
     private final Integer priority;
     private final JobStatus status;
     private final Instant createdAt;
 
     public JobResponse(String id, String name, String command, double cpuRequirement,
-                        long memoryRequirement, int maxRetries, Integer priority,
+                        long memoryRequirement, int maxRetries, int attemptCount, Integer priority,
                         JobStatus status, Instant createdAt) {
         this.id = id;
         this.name = name;
@@ -25,6 +26,7 @@ public class JobResponse {
         this.cpuRequirement = cpuRequirement;
         this.memoryRequirement = memoryRequirement;
         this.maxRetries = maxRetries;
+        this.attemptCount = attemptCount;
         this.priority = priority;
         this.status = status;
         this.createdAt = createdAt;
@@ -52,6 +54,10 @@ public class JobResponse {
 
     public int getMaxRetries() {
         return maxRetries;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
     }
 
     public Integer getPriority() {
