@@ -4,6 +4,7 @@ import com.cloudforge.common.queue.JobQueueKeys;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,10 +33,13 @@ public class JobQueue {
 
     /**
      * Whether a job id is currently present on the queue - used by reconciliation to
-     * avoid pushing a duplicate entry for a job that's already there.
+     * avoid pushing a duplicate entry for a job that's already there. Scans the full
+     * list (LRANGE) rather than ListOperations#indexOf, which issues LPOS - added in
+     * Redis 6.0.6 and unsupported by the Redis 5.0.14 binary this project embeds.
      */
     public boolean isQueued(String jobId) {
-        return redisTemplate.opsForList().indexOf(JobQueueKeys.QUEUED_JOBS_KEY, jobId) != null;
+        List<String> jobIds = redisTemplate.opsForList().range(JobQueueKeys.QUEUED_JOBS_KEY, 0, -1);
+        return jobIds != null && jobIds.contains(jobId);
     }
 
     public long size() {
