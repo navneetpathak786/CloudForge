@@ -36,12 +36,6 @@ spring:
   config:
     activate:
       on-profile: local
-  flyway:
-    # scheduler-service only owns the workers table (db/migration). It also reads/writes
-    # the jobs table that api-service owns, so for its own isolated local/test Postgres
-    # instance it bootstraps a standalone copy of that table from db/migration-local -
-    # never applied against the real shared database.
-    locations: classpath:db/migration,classpath:db/migration-local
 
 # The embedded Windows redis-server binary's INFO reply contains a
 # backslash-heavy executable path that Spring Data Redis's health

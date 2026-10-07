@@ -3,6 +3,7 @@ package com.cloudforge.scheduler.loop;
 import com.cloudforge.common.model.WorkerStatus;
 import com.cloudforge.scheduler.entity.WorkerEntity;
 import com.cloudforge.scheduler.repository.WorkerRepository;
+import com.cloudforge.scheduler.service.WorkerHealthService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,11 +24,13 @@ import java.util.List;
 public class WorkerHealthLoopRunner {
 
     private final WorkerRepository workerRepository;
+    private final WorkerHealthService workerHealthService;
     private final long heartbeatTimeoutMs;
 
-    public WorkerHealthLoopRunner(WorkerRepository workerRepository,
+    public WorkerHealthLoopRunner(WorkerRepository workerRepository, WorkerHealthService workerHealthService,
             @Value("${scheduler.worker-health.heartbeat-timeout-ms:15000}") long heartbeatTimeoutMs) {
         this.workerRepository = workerRepository;
+        this.workerHealthService = workerHealthService;
         this.heartbeatTimeoutMs = heartbeatTimeoutMs;
     }
 
@@ -36,7 +39,7 @@ public class WorkerHealthLoopRunner {
         Instant threshold = Instant.now().minusMillis(heartbeatTimeoutMs);
         List<WorkerEntity> stale = workerRepository.findByStatusAndLastHeartbeatBefore(WorkerStatus.HEALTHY, threshold);
         for (WorkerEntity worker : stale) {
-            workerRepository.markDown(worker.getId(), threshold);
+            workerHealthService.markDown(worker.getId(), threshold);
         }
     }
 }

@@ -48,6 +48,9 @@ class WorkerFailureRecoveryIntegrationTest {
     private StuckJobRecoveryService stuckJobRecoveryService;
 
     @Autowired
+    private WorkerHealthService workerHealthService;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     private WorkerEntity persistWorker(String id, WorkerStatus status, Instant lastHeartbeat,
@@ -90,8 +93,7 @@ class WorkerFailureRecoveryIntegrationTest {
         assertThat(stale).extracting(WorkerEntity::getId).contains("int-stale-worker");
         assertThat(stale).extracting(WorkerEntity::getId).doesNotContain("int-fresh-worker");
 
-        int marked = workerRepository.markDown("int-stale-worker", threshold);
-        assertThat(marked).isEqualTo(1);
+        workerHealthService.markDown("int-stale-worker", threshold);
         assertThat(workerRepository.findById("int-stale-worker").orElseThrow().getStatus())
                 .isEqualTo(WorkerStatus.DOWN);
         assertThat(workerRepository.findById("int-fresh-worker").orElseThrow().getStatus())
